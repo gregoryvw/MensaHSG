@@ -58,10 +58,11 @@ def _squash_spaced_letters(s: str) -> str:
         return word
     return " ".join(fix_word(w) for w in s.split())
 
-def _extract_items_from_lines(lines: list[str]) -> list[dict]:
+def _extract_items_from_lines(lines: list[str], max_items: int | None = 4) -> list[dict]:
     """
     Teilt einen Tagesblock in einzelne Gerichte und extrahiert den Preis.
     Erkennt mehrere CHF-Beträge pro Zeile/Textblock.
+    Bricht früh ab, sobald max_items erreicht sind.
     """
     text = " ".join(lines)
     text = re.sub(r"\s+", " ", text).strip()
@@ -70,10 +71,8 @@ def _extract_items_from_lines(lines: list[str]) -> list[dict]:
     text = re.sub(r"\b([A-ZÄÖÜ](?:\s*,\s*[A-ZÄÖÜ])+)\b", "", text)
     text = re.sub(r"\b(Allerg(?:ene|ien)|Icon|Info|Bio)\b.*?$", "", text, flags=re.IGNORECASE)
 
-    items = []
+    items: list[dict] = []
 
-    # Diese Regex trennt jedes Menü sauber:
-    #   <Titel> CHF <Preis>  -> nicht-gierig bis zum nächsten CHF oder Satzende
     pattern = re.compile(
         r"(?P<title>.+?)\s*CHF\s*(?P<price>\d{1,2}[.,]\d{2})(?=\s*(?:[A-ZÄÖÜ]|$)|\s*CHF)",
         re.IGNORECASE,
@@ -90,13 +89,17 @@ def _extract_items_from_lines(lines: list[str]) -> list[dict]:
 
         if title:
             items.append({"title": title, "price_chf": price})
+            if max_items and len(items) >= max_items:
+                return items  # ✅ early return bei 4
 
-    # Falls trotzdem keine Preise gefunden: jede Zeile als Item
+    # Falls keine Preise gefunden: jede Zeile als Item
     if not items:
         for ln in lines:
             t = re.sub(r"\s+", " ", ln).strip(" ,;")
             if t:
                 items.append({"title": t, "price_chf": None})
+                if max_items and len(items) >= max_items:
+                    return items  # ✅ early return bei 4
 
     return items
 
